@@ -1,72 +1,160 @@
-# ⚽ Soccer Engine
+# Soccer Engine
 
-Welcome to the **Soccer Engine AI Challenge**! This is a lightweight, SDL2-based soccer simulation designed for students and developers to practice low-level C programming, game engine architecture, and autonomous agent logic.
+A 6v6 soccer simulation written in C with SDL2. The engine provides physics, rendering, and match flow; this repository implements the **referee** rule layer and **coach** player AI on top of that core.
 
-## 📌 Project Overview
-
-The engine simulates a 6v6 soccer match. The core physics, rendering, and entity management are provided. Your task is to act as the **Referee** (Phase 1) and the **Coach** (Phase 2).
-
-### Tech Stack
-
-* **Language:** C (C99)
-* **Graphics:** SDL2, SDL_ttf, SDL_image
-* **Physics:** Custom 2D vector-based kinematics
+Originally developed as a Fundamentals of Programming (FOP) course project (Fall 2025).
 
 ---
 
-## 🚀 Phase 1: The Referee (Game Rules)
+## Project Overview
 
-In this phase, you will focus on `engine/logic/referee.c`. Currently, the game is a "wild west" where players can move at light speed, and goals aren't properly recorded.
+The simulation runs a continuous 6-a-side match between two teams (red / left and blue / right). Each player is a small state machine (`IDLE`, `MOVING`, `SHOOTING`, `INTERCEPTING`) driven by coach-assigned logic functions. A separate referee module validates talents, movement, shooting, and match events such as goals and out-of-bounds.
 
-**Your Objectives:**
-
-1. **Enforce Talent Limits:** Implement `verify_talents` to ensure no player exceeds the `MAX_TALENT_PER_PLAYER` sum (set to 5).
-2. **Validate Movement:** Implement `verify_movement` to ensure players don't exceed the speed allowed by their Agility talent.
-3. **Ball Possession Rules:** Validate that a player actually has the ball before they are allowed to enter the `SHOOTING` state.
-4. **Set-Pieces:** Ensure that during a kickoff, the ball is passed backwards into the team's own half, as per the `verify_shoot` logic.
-
-**Goal:** Familiarize yourself with the `Scene` structure, the `Player` entity, and how the game loop interacts with the logic layer.
+The executable builds as `soccerengine` via CMake and opens an SDL2 window that draws the pitch, players, ball, and score.
 
 ---
 
-## 🧠 Phase 2: The Coach (AI Strategy)
+## Screenshots / Gameplay
 
-Once the rules are enforced, it’s time to make the players "smart." You will work primarily in `engine/logic/coach.c`.
+![Gameplay](assets/screenshots/gameplay-1.png)
 
-**Your Objectives:**
-
-* **Role-Based Logic:** Assign different movement patterns to Defenders, Midfielders, and Attackers based on their `kit` number.
-* **Intercepting:** Write logic so that if a ball comes within a certain radius, players automatically switch to the `INTERCEPTING` state to lunge for it.
-* **Teamwork (Passing):** Instead of just shooting at the goal, players should scan for teammates. If a teammate is closer to the goal and "open" (not covered by an opponent), the player should pass.
-* **Defensive Positioning:** Defenders should stay between the ball and their own goal rather than just chasing the ball randomly.
-
-**Goal:** Develop a rational AI agent that can win a match against a random-movement team without violating any of the referee's rules.
+![Gameplay](assets/screenshots/gameplay-2.png)
 
 ---
 
-## 🛠️ Installation & Setup
+## Features
+
+- 6v6 match simulation with team scores and timed match flow
+- Custom 2D kinematics for players and the ball (velocity, friction, collisions)
+- Role-based player AI (attackers, midfielders, defenders, goalkeeper)
+- Ball possession tracking and interception logic
+- Referee checks for goals, outs, talent limits, speed caps, and kickoff direction
+- SDL2 rendering with team icons and on-screen text (embedded font)
+
+---
+
+## Referee System
+
+Implemented in `engine/logic/referee.c`. The referee runs as part of the simulation update and enforces match rules separately from physics.
+
+| Area | What is implemented |
+| --- | --- |
+| **Goals** | Detects when the entire ball crosses a goal line inside the goal mouth; updates the scoring team and returns `GOAL` |
+| **Out of bounds** | Detects when the ball is fully outside the pitch (excluding valid goal entries) and returns `OUT` |
+| **Talent validation** | `verify_talents` checks each skill is in range and the total does not exceed `MAX_TALENT_PER_PLAYER` |
+| **State checks** | `verify_state` prevents `SHOOTING` unless the player currently possesses the ball |
+| **Movement limits** | `verify_movement` clamps player velocity to a max derived from the Agility talent |
+| **Shoot / kickoff** | `verify_shoot` clamps ball speed by the Shooting talent and requires kickoff passes into the team's own half |
+
+---
+
+## Coach AI
+
+Implemented in `engine/logic/coach.c`. The coach assigns per-player function pointers for movement, shooting, and state changes, plus talents and kickoff positions.
+
+| Area | What is implemented |
+| --- | --- |
+| **Role-based movement** | Kit roles drive different patterns: attackers/midfielders push up; defenders hold shape; kit `3` is the goalkeeper and stays in a box near goal |
+| **Interception** | Players switch to `INTERCEPTING` when the free or opposed ball is within a role-dependent radius |
+| **Passing & shooting** | Possessors choose between intelligent passes to open teammates and shots toward goal corners (including one-on-one finishes) |
+| **Defensive positioning** | Defenders position between the ball/opponent and their own goal rather than always chasing the ball |
+| **Kickoff & restarts** | Kickoff direction is forced into the own half; restart/out kicks are constrained near boundaries |
+| **Talents & formation** | Per-player talent distributions and kickoff positions are defined for both teams |
+
+By default, `coach_both_teams` is enabled so the same AI logic drives both sides.
+
+---
+
+## Tech Stack
+
+| Component | Details |
+| --- | --- |
+| Language | C (C99) |
+| Build | CMake ≥ 3.20 |
+| Graphics | SDL2, SDL_image, SDL_ttf |
+| Physics | Custom 2D vectors (`engine/core/vec2`) |
+| Dependencies | System SDL2 if available; otherwise fetched via CMake `FetchContent` |
+
+---
+
+## Project Structure
+
+```
+.
+├── main.c                 # Entry point: init, game loop, render
+├── CMakeLists.txt         # Build configuration
+├── cmake/
+│   └── LinkSDL2.cmake     # SDL2 discovery / FetchContent helper
+└── engine/
+    ├── assets/            # Fonts and player/app icons
+    ├── core/              # Constants and 2D vector math
+    ├── entities/          # Ball, player, team, field definitions
+    ├── game/              # Scene update, match state, possession
+    ├── graphics/          # SDL2 renderer
+    └── logic/             # Referee rules and coach AI
+```
+
+Important modules:
+
+- **`engine/core/`** — pitch layout, talent/speed limits, vector helpers  
+- **`engine/entities/`** — `Player`, `Team`, `Ball`, and field types  
+- **`engine/game/`** — scene lifecycle, possession, set pieces  
+- **`engine/graphics/`** — window, drawing, scene update entry used by `main.c`  
+- **`engine/logic/`** — `referee.c` (rules) and `coach.c` (AI factory)
+
+---
+
+## Build & Run
 
 ### Prerequisites
 
-* **GCC** or **Clang** compiler
-* **SDL2** libraries (including `SDL_ttf` and `SDL_image`)
+- CMake 3.20 or newer
+- A C99 compiler (GCC, Clang, or MSVC with a compatible toolchain)
+- `xxd` (used at build time to embed `DejaVuSans.ttf`)
+- SDL2, SDL_image, and SDL_ttf (optional if you rely on CMake FetchContent)
+
+### Build
+
+```bash
+mkdir build
+cd build
+cmake ..
+cmake --build .
+```
+
+The executable is written to `build/bin/soccerengine` (or `soccerengine.exe` on Windows). Player icons are copied to `build/bin/assets/icons/`.
+
+### Run
+
+From the `build` directory:
+
+```bash
+# Linux / macOS
+./bin/soccerengine
+
+# Windows
+.\bin\soccerengine.exe
+```
+
+Close the window to quit. There is no separate CLI; the match starts automatically.
 
 ---
 
-## 📂 Project Structure
+## Credits / Course Project
 
-* `engine/core/`: Constants and Vector Math (`vec2`).
-* `engine/entities/`: Definitions for `Ball`, `Player`, and `Team`.
-* `engine/logic/`: This is your workspace. Contains `referee.c` and `coach.c`.
-* `engine/graphics/`: SDL2 Renderer and Scene management.
+This project builds on the **Soccer Engine AI Challenge** framework provided for the FOP course.
 
----
+Engine / assignment base by:
 
+- [MatinB02](https://github.com/MatinB02)
+- [Mani Ebrahimi](https://github.com/maniebra)
 
-## 🤝 Contributing
-
-This is an educational project provided by [me](https://github.com/MatinB02) and [Mani Ebrahimi](https://github.com/maniebra). Feel free to fork it, implement your own AI strategies, and open a Pull Request if you find bugs in the core engine!
+The referee and coach implementations in this repository complete the two course phases described above.
 
 ---
 
-*Good luck, Coach! Bring home the trophy.* 🏆
+## Author
+
+**Maani Safari** — student implementation (referee + coach AI)
+
+Repository: [maani-safari/FOP-Project](https://github.com/maani-safari/FOP-Project)
